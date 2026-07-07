@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'services/storage_service.dart';
+import 'services/video_storage_service.dart';
 import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await StorageService().init();
+  await VideoStorageService().init();
   runApp(const ComicReaderApp());
 }
 

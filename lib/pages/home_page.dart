@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'comic_list_page.dart';
+import 'video_home_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +16,7 @@ class _HomePageState extends State<HomePage> {
   bool _showSuggestions = true;
 
   static const String _password = '795531';
+  static const String _videoPassword = '8012';
 
   void _onSend(String text) {
     final input = text.trim();
@@ -32,6 +34,13 @@ class _HomePageState extends State<HomePage> {
         if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const ComicListPage()),
+        );
+      });
+    } else if (input == _videoPassword) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const VideoHomePage()),
         );
       });
     } else {
