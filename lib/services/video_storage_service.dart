@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
-import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/video_item.dart';
 import '../models/video_bookmark.dart';
@@ -168,16 +167,9 @@ class VideoStorageService {
 
     bool hasCover = false;
     try {
-      int timeMs = 10000;
-      try {
-        final vc = VideoPlayerController.file(File(destPath));
-        await vc.initialize();
-        timeMs = (vc.value.duration.inMilliseconds / 2).round();
-        await vc.dispose();
-      } catch (_) {}
       final thumbPath = await VideoThumbnail.thumbnailFile(
         video: destPath, thumbnailPath: '${_coversDir.path}/$id.jpg',
-        imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: timeMs,
+        imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: 10000,
       );
       hasCover = thumbPath != null;
     } catch (_) {}
@@ -189,7 +181,6 @@ class VideoStorageService {
       fileName: destName, fileSize: fileSize, tags: tags, hasCover: hasCover,
     ));
     await _saveMeta(); await _saveTags();
-    // Generate timeline thumbnails in background
     generateTimelineThumbnails(id);
     return id;
   }
@@ -240,27 +231,21 @@ class VideoStorageService {
     final videoPath = getVideoPath(videoId);
     if (videoPath == null) return;
 
-    int durationMs = 0;
-    try {
-      final vc = VideoPlayerController.file(File(videoPath));
-      await vc.initialize();
-      durationMs = vc.value.duration.inMilliseconds;
-      await vc.dispose();
-    } catch (_) { return; }
-
     final thumbDir = Directory('${_thumbsDir.path}/$videoId');
     if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
 
+    // Generate thumbnails at fixed intervals (10s, 40s, 70s, ..., up to 100 captures)
     const intervalMs = 30000;
-    for (int t = 0; t < durationMs; t += intervalMs) {
-      final thumbPath = '${thumbDir.path}/$t.jpg';
+    for (int t = 0; t < 100; t++) {
+      final timeMs = t * intervalMs;
+      final thumbPath = '${thumbDir.path}/$timeMs.jpg';
       if (File(thumbPath).existsSync()) continue;
       try {
         await VideoThumbnail.thumbnailFile(
           video: videoPath, thumbnailPath: thumbPath,
-          imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: t,
+          imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: timeMs,
         );
-      } catch (_) {}
+      } catch (_) { break; } // stop when we run out of video
     }
   }
 
@@ -339,16 +324,9 @@ class VideoStorageService {
 
       bool hasCover = false;
       try {
-        int timeMs = 10000;
-        try {
-          final vc = VideoPlayerController.file(File(destPath));
-          await vc.initialize();
-          timeMs = (vc.value.duration.inMilliseconds / 2).round();
-          await vc.dispose();
-        } catch (_) {}
         final thumbPath = await VideoThumbnail.thumbnailFile(
           video: destPath, thumbnailPath: '${_coversDir.path}/$id.jpg',
-          imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: timeMs,
+          imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: 10000,
         );
         hasCover = thumbPath != null;
       } catch (_) {}
