@@ -73,28 +73,35 @@ class _ReaderPageState extends State<ReaderPage> {
 
       setState(() => _isLoading = false);
 
-      // Load initial pages around progress position
+      // Async batch-load initial pages
       if (_comic!.progress > 0) {
         final targetIdx = _comic!.progress - 1;
-        for (int i = targetIdx - 5; i <= targetIdx + 10; i++) {
-          if (i >= 0 && i < _totalPages) _lazyLoad(i);
-        }
+        _batchLoad(targetIdx - 5, targetIdx + 100);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final offset = (_comic!.progress - 1) * MediaQuery.of(context).size.height * 0.8;
           _scrollController.jumpTo(offset.clamp(0, _scrollController.position.maxScrollExtent));
         });
       } else {
-        for (int i = 0; i < 15 && i < _totalPages; i++) {
-          _lazyLoad(i);
-        }
+        _batchLoad(0, 100);
       }
     } catch (e) {
       setState(() => _error = e.toString());
     }
   }
 
-  void _lazyLoad(int pageIndex) {
+  /// Batch-load a range of pages asynchronously to avoid blocking the UI
+  void _batchLoad(int start, int end) {
+    for (int i = start; i <= end; i++) {
+      if (i >= 0 && i < _totalPages) {
+        _lazyLoadAsync(i);
+      }
+    }
+  }
+
+  Future<void> _lazyLoadAsync(int pageIndex) async {
     if (_pageData.containsKey(pageIndex)) return;
+    // Yield to let UI update between image loads
+    await Future.delayed(Duration.zero);
     try {
       final data = _allImages[pageIndex].content as Uint8List;
       _pageData[pageIndex] = data;
@@ -118,16 +125,15 @@ class _ReaderPageState extends State<ReaderPage> {
     _saveProgress(newPage);
 
     // Lazy load pages around current position
+    // Load ahead: wider range (50 pages ahead)
     final startIdx = (newPage - 1 - 10).clamp(0, _totalPages - 1);
-    final endIdx = (newPage - 1 + 15).clamp(0, _totalPages - 1);
-    for (int i = startIdx; i <= endIdx; i++) {
-      if (!_pageData.containsKey(i)) _lazyLoad(i);
-    }
+    final endIdx = (newPage - 1 + 100).clamp(0, _totalPages - 1);
+    _batchLoad(startIdx, endIdx);
 
-    // Free far away pages
+    // Free far away pages (keep 20 behind, 120 ahead)
     final toRemove = <int>[];
     for (final idx in _pageData.keys) {
-      if (idx < startIdx - 30 || idx > endIdx + 30) {
+      if (idx < startIdx - 20 || idx > endIdx + 120) {
         toRemove.add(idx);
       }
     }
@@ -178,10 +184,8 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     final targetIdx = targetPage - 1;
-    // Preload a wide range around target
-    for (int i = targetIdx - 15; i <= targetIdx + 30; i++) {
-      if (i >= 0 && i < _totalPages) _lazyLoad(i);
-    }
+    // Preload wide range around target
+    _batchLoad(targetIdx - 15, targetIdx + 100);
     // Trigger rebuild to start loading
     setState(() => _currentPage = targetPage);
 
