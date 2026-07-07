@@ -3,7 +3,7 @@ name: Build iOS IPA
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build-ios:
@@ -22,11 +22,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install --repo-update
-
       - name: Analyze code
         run: flutter analyze
 
@@ -40,7 +35,6 @@ jobs:
           cd /tmp/ipa
           zip -r GPT.ipa Payload
           rm -rf Payload
-          echo "IPA_PATH=/tmp/ipa/GPT.ipa" >> $GITHUB_ENV
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
