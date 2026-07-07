@@ -8,9 +8,6 @@ on:
 jobs:
   build-ios:
     runs-on: macos-14
-    defaults:
-      run:
-        working-directory: comic_reader
 
     steps:
       - name: Checkout code
@@ -24,6 +21,11 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
 
       - name: Analyze code
         run: flutter analyze
