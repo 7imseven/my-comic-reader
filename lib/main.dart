@@ -6,7 +6,11 @@ import 'pages/home_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await StorageService().init();
-  await VideoStorageService().init();
+  try {
+    await VideoStorageService().init();
+  } catch (e) {
+    debugPrint('Video storage init failed: $e');
+  }
   runApp(const ComicReaderApp());
 }
 
