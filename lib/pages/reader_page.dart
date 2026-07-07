@@ -178,18 +178,23 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     final targetIdx = targetPage - 1;
-    for (int i = targetIdx - 5; i <= targetIdx + 15; i++) {
+    // Preload a wide range around target
+    for (int i = targetIdx - 15; i <= targetIdx + 30; i++) {
       if (i >= 0 && i < _totalPages) _lazyLoad(i);
     }
-
-    final estPos = targetIdx * MediaQuery.of(context).size.height * 0.78;
-    _scrollController.animateTo(
-      estPos.clamp(0, _scrollController.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-
+    // Trigger rebuild to start loading
     setState(() => _currentPage = targetPage);
+
+    // Delay scroll slightly to let images begin loading
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!_scrollController.hasClients) return;
+      final estPos = targetIdx * MediaQuery.of(context).size.height * 0.78;
+      _scrollController.animateTo(
+        estPos.clamp(0, _scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
@@ -257,7 +262,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.only(
-        top: 50,
+        top: 36,
         bottom: MediaQuery.of(context).padding.bottom + 80,
       ),
       itemCount: _computeItemCount(),
@@ -443,14 +448,16 @@ class _ReaderPageState extends State<ReaderPage> {
           padding: EdgeInsets.only(
             left: 4,
             right: 12,
-            top: MediaQuery.of(context).padding.top + 4,
-            bottom: 8,
+            top: MediaQuery.of(context).padding.top,
+            bottom: 4,
           ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
                 onPressed: () => Navigator.pop(context),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
               ),
               Expanded(
                 child: GestureDetector(
