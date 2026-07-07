@@ -45,6 +45,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   Timer? _hideTimer;
 
   Future<void> _initPlayer() async {
+    await _storage.init();
     _video = _storage.getVideo(widget.videoId);
     if (_video == null || !mounted) return;
     final path = _storage.getVideoPath(widget.videoId);

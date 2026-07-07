@@ -18,6 +18,11 @@ class _VideoHomePageState extends State<VideoHomePage> {
   @override
   void initState() {
     super.initState();
+    _initAndReload();
+  }
+
+  Future<void> _initAndReload() async {
+    await _storage.init();
     _reload();
   }
 

@@ -19,8 +19,12 @@ class _VideoTimelinePageState extends State<VideoTimelinePage> {
   @override
   void initState() {
     super.initState();
+    _initAndLoad();
+  }
+
+  Future<void> _initAndLoad() async {
+    await _storage.init();
     _load();
-    // Auto-refresh while generating
     _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (_storage.isGeneratingThumbs(widget.videoId)) {
         _load();

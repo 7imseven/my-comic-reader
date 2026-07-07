@@ -19,6 +19,11 @@ class _VideoListPageState extends State<VideoListPage> {
   @override
   void initState() {
     super.initState();
+    _initAndReload();
+  }
+
+  Future<void> _initAndReload() async {
+    await _storage.init();
     _reload();
   }
 
