@@ -31,7 +31,8 @@ class _VideoHomePageState extends State<VideoHomePage> {
 
   Future<void> _importVideo() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.video,
+      type: FileType.custom,
+      allowedExtensions: ['mp4', 'mov', 'm4v', 'avi', 'mkv'],
     );
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;

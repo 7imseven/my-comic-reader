@@ -183,30 +183,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         children: [
           // Video player
           Center(
-            child: GestureDetector(
-              onTap: _toggleControls,
-              child: SizedBox(
-                width: screenW,
-                height: _isFullscreen ? double.infinity : displayH,
-                child: VideoPlayer(_controller!),
-              ),
+            child: SizedBox(
+              width: screenW,
+              height: _isFullscreen ? double.infinity : displayH,
+              child: VideoPlayer(_controller!),
             ),
           ),
 
-          // Swipe-to-seek overlay (transparent)
-          if (_controlsVisible)
-            Positioned(
-              left: 0, right: 0,
-              top: 0,
-              height: _isFullscreen ? double.infinity : displayH + MediaQuery.of(context).padding.top + kToolbarHeight,
-              child: GestureDetector(
-                onHorizontalDragStart: _onDragStart,
-                onHorizontalDragUpdate: _onDragUpdate,
-                onHorizontalDragEnd: _onDragEnd,
-                onTap: _toggleControls,
-                child: Container(color: Colors.transparent),
-              ),
+          // Swipe-to-seek overlay (always active, even when controls hidden)
+          Positioned.fill(
+            child: GestureDetector(
+              onHorizontalDragStart: _onDragStart,
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              onTap: _toggleControls,
+              child: Container(color: Colors.transparent),
             ),
+          ),
 
           // Seek overlay indicator
           if (_isSeeking)
