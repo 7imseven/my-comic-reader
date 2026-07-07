@@ -132,12 +132,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final deltaX = details.localPosition.dx - _dragStartX;
     final ratio = deltaX / screenWidth; // -1 to 1
     final totalSec = _controller!.value.duration.inSeconds;
-    final seekSec = (ratio * 60).round(); // max ±60s
+    final seekSec = (ratio * totalSec * 0.1).round(); // 10% per full swipe
     final targetSec = (_dragStartPosition.inSeconds + seekSec).clamp(0, totalSec);
 
     setState(() {
       final sign = seekSec >= 0 ? '+' : '';
-      _seekOverlayText = '${sign}${seekSec}s';
+      final pct = totalSec > 0 ? (seekSec.abs() * 100 / totalSec).round() : 0;
+      _seekOverlayText = '${sign}${_formatDuration(Duration(seconds: seekSec.abs()))} ($pct%)';
     });
 
     _controller!.seekTo(Duration(seconds: targetSec));
