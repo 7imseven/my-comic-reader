@@ -137,11 +137,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final pct = totalSec > 0 ? (seekSec.abs() * 100 / totalSec).round() : 0;
     _seekOverlayText = '${sign}${_formatDuration(Duration(seconds: seekSec.abs()))} ($pct%)';
 
-    // Look for pre-generated thumbnail at nearest 30s interval
-    final nearest30s = (targetSec ~/ 30) * 30 * 1000;
-    final thumbs = _storage.getTimelineThumbnails(widget.videoId);
-    final match = thumbs.where((e) => e.key == nearest30s).toList();
-    _seekThumbPath = match.isNotEmpty ? match.first.value : null;
+    // Look for pre-generated thumbnail at nearest 30s interval  
+    _seekThumbPath = null;
+    try {
+      final nearest30s = (targetSec ~/ 30) * 30 * 1000;
+      final thumbs = _storage.getTimelineThumbnails(widget.videoId);
+      final match = thumbs.where((e) => e.key == nearest30s).toList();
+      _seekThumbPath = match.isNotEmpty ? match.first.value : null;
+    } catch (_) {} // ignore thumbnail errors, seek should still work
 
     setState(() {});
     _controller!.seekTo(Duration(seconds: targetSec));

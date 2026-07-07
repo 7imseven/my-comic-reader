@@ -233,25 +233,26 @@ class VideoStorageService {
     final videoPath = getVideoPath(videoId);
     if (videoPath == null) return;
     _generatingThumbs.add(videoId);
+    try {
+      final thumbDir = Directory('${_thumbsDir.path}/$videoId');
+      if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
 
-    final thumbDir = Directory('${_thumbsDir.path}/$videoId');
-    if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
-
-    // Generate thumbnails at fixed intervals (10s, 40s, 70s, ..., up to 100 captures)
-    const intervalMs = 30000;
-    for (int t = 0; t < 200; t++) {
-      final timeMs = t * intervalMs;
-      final thumbPath = '${thumbDir.path}/$timeMs.jpg';
-      if (File(thumbPath).existsSync()) continue;
-      try {
-        final result = await VideoThumbnail.thumbnailFile(
-          video: videoPath, thumbnailPath: thumbPath,
-          imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: timeMs,
-        );
-        if (result == null) break;
-      } catch (_) { break; }
+      const intervalMs = 30000;
+      for (int t = 0; t < 200; t++) {
+        final timeMs = t * intervalMs;
+        final thumbPath = '${thumbDir.path}/$timeMs.jpg';
+        if (File(thumbPath).existsSync()) continue;
+        try {
+          final result = await VideoThumbnail.thumbnailFile(
+            video: videoPath, thumbnailPath: thumbPath,
+            imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: timeMs,
+          );
+          if (result == null) break;
+        } catch (_) { break; }
+      }
+    } finally {
+      _generatingThumbs.remove(videoId);
     }
-    _generatingThumbs.remove(videoId);
   }
 
   /// Get sorted list of [timestamp (ms), file path] pairs
