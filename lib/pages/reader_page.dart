@@ -444,39 +444,46 @@ class _ReaderPageState extends State<ReaderPage> {
         opacity: _topBarVisible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 200),
         child: Container(
-          color: Colors.black.withValues(alpha: 0.85),
-          padding: EdgeInsets.only(
-            left: 4,
-            right: 12,
-            top: MediaQuery.of(context).padding.top,
-            bottom: 4,
+          height: MediaQuery.of(context).padding.top + 44,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xCC000000), Color(0x00000000)],
+            ),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                onPressed: () => Navigator.pop(context),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                padding: EdgeInsets.zero,
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: _chapters.length > 1 ? _showChapterMenu : null,
-                  child: Text(
-                    _chapters.length > 1 && _getCurrentChapterName().isNotEmpty
-                        ? _getCurrentChapterName()
-                        : _comic?.name ?? '',
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, right: 12, bottom: 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    padding: EdgeInsets.zero,
                   ),
-                ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _chapters.length > 1 ? _showChapterMenu : null,
+                      child: Text(
+                        _chapters.length > 1 && _getCurrentChapterName().isNotEmpty
+                            ? _getCurrentChapterName()
+                            : _comic?.name ?? '',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$_currentPage/$_totalPages',
+                    style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 13),
+                  ),
+                ],
               ),
-              Text(
-                '$_currentPage/$_totalPages',
-                style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 13),
-              ),
-            ],
+            ),
           ),
         ),
       ),
