@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/video_item.dart';
 import '../models/video_bookmark.dart';
@@ -14,6 +15,7 @@ class VideoStorageService {
   late Directory _appDir;
   late Directory _videosDir;
   late Directory _coversDir;
+  late Directory _thumbsDir;
   List<VideoItem> _videos = [];
   List<String> _tags = [];
   List<VideoBookmark> _bookmarks = [];
@@ -27,6 +29,7 @@ class VideoStorageService {
     _coversDir = Directory('${_appDir.path}/video_covers');
     if (!_videosDir.existsSync()) _videosDir.createSync(recursive: true);
     if (!_coversDir.existsSync()) _coversDir.createSync(recursive: true);
+    if (!_thumbsDir.existsSync()) _thumbsDir.createSync(recursive: true);
     await _loadMeta();
     await _loadBookmarks();
     _initialized = true;
@@ -135,7 +138,23 @@ class VideoStorageService {
   }
 
   Future<void> removeTag(String tag) async {
-    _tags.remove(tag); await _saveTags();
+    _tags.remove(tag);
+    // Remove tag from all videos
+    for (final v in _videos) {
+      if (v.tags.contains(tag)) {
+        v.tags.remove(tag);
+        if (v.tags.isEmpty) v.tags.add('默认');
+      }
+    }
+    await _saveMeta();
+    await _saveTags();
+  }
+
+  Future<void> renameVideo(int id, String newName) async {
+    final video = getVideo(id);
+    if (video == null) return;
+    video.name = newName;
+    await _saveMeta();
   }
 
   Future<int> importVideo(File sourceFile, List<String> tags) async {
@@ -149,9 +168,16 @@ class VideoStorageService {
 
     bool hasCover = false;
     try {
+      int timeMs = 10000;
+      try {
+        final vc = VideoPlayerController.file(File(destPath));
+        await vc.initialize();
+        timeMs = (vc.value.duration.inMilliseconds / 2).round();
+        await vc.dispose();
+      } catch (_) {}
       final thumbPath = await VideoThumbnail.thumbnailFile(
         video: destPath, thumbnailPath: '${_coversDir.path}/$id.jpg',
-        imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70,
+        imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: timeMs,
       );
       hasCover = thumbPath != null;
     } catch (_) {}
@@ -163,6 +189,8 @@ class VideoStorageService {
       fileName: destName, fileSize: fileSize, tags: tags, hasCover: hasCover,
     ));
     await _saveMeta(); await _saveTags();
+    // Generate timeline thumbnails in background
+    generateTimelineThumbnails(id);
     return id;
   }
 
@@ -171,6 +199,11 @@ class VideoStorageService {
     if (video == null) return;
     try { await File('${_videosDir.path}/${video.fileName}').delete(); } catch (_) {}
     try { await File('${_coversDir.path}/$id.jpg').delete(); } catch (_) {}
+    // Delete timeline thumbs for this video
+    try {
+      final thumbsDir = Directory('${_thumbsDir.path}/$id');
+      if (thumbsDir.existsSync()) thumbsDir.deleteSync(recursive: true);
+    } catch (_) {}
     _videos.removeWhere((v) => v.id == id);
     _bookmarks.removeWhere((b) => b.videoId == id);
     await _saveMeta(); await _saveBookmarks();
@@ -198,6 +231,52 @@ class VideoStorageService {
     if (video == null) return null;
     final path = '${_videosDir.path}/${video.fileName}';
     return File(path).existsSync() ? path : null;
+  }
+
+  // ===== Timeline Thumbnails =====
+
+  /// Generate a thumbnail every 30 seconds in the background
+  Future<void> generateTimelineThumbnails(int videoId) async {
+    final videoPath = getVideoPath(videoId);
+    if (videoPath == null) return;
+
+    int durationMs = 0;
+    try {
+      final vc = VideoPlayerController.file(File(videoPath));
+      await vc.initialize();
+      durationMs = vc.value.duration.inMilliseconds;
+      await vc.dispose();
+    } catch (_) { return; }
+
+    final thumbDir = Directory('${_thumbsDir.path}/$videoId');
+    if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
+
+    const intervalMs = 30000;
+    for (int t = 0; t < durationMs; t += intervalMs) {
+      final thumbPath = '${thumbDir.path}/$t.jpg';
+      if (File(thumbPath).existsSync()) continue;
+      try {
+        await VideoThumbnail.thumbnailFile(
+          video: videoPath, thumbnailPath: thumbPath,
+          imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: t,
+        );
+      } catch (_) {}
+    }
+  }
+
+  /// Get sorted list of [timestamp (ms), file path] pairs
+  List<MapEntry<int, String>> getTimelineThumbnails(int videoId) {
+    final thumbDir = Directory('${_thumbsDir.path}/$videoId');
+    if (!thumbDir.existsSync()) return [];
+    final files = thumbDir.listSync().whereType<File>().toList();
+    final entries = <MapEntry<int, String>>[];
+    for (final f in files) {
+      final name = f.uri.pathSegments.last;
+      final ts = int.tryParse(name.replaceAll('.jpg', ''));
+      if (ts != null) entries.add(MapEntry(ts, f.path));
+    }
+    entries.sort((a, b) => a.key.compareTo(b.key));
+    return entries;
   }
 
   // ===== Backup =====
@@ -260,9 +339,16 @@ class VideoStorageService {
 
       bool hasCover = false;
       try {
+        int timeMs = 10000;
+        try {
+          final vc = VideoPlayerController.file(File(destPath));
+          await vc.initialize();
+          timeMs = (vc.value.duration.inMilliseconds / 2).round();
+          await vc.dispose();
+        } catch (_) {}
         final thumbPath = await VideoThumbnail.thumbnailFile(
           video: destPath, thumbnailPath: '${_coversDir.path}/$id.jpg',
-          imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70,
+          imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: timeMs,
         );
         hasCover = thumbPath != null;
       } catch (_) {}

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/video_item.dart';
 import '../services/video_storage_service.dart';
 import 'video_player_page.dart';
+import 'video_timeline_page.dart';
 
 class VideoListPage extends StatefulWidget {
   final String tag;
@@ -48,6 +49,29 @@ class _VideoListPageState extends State<VideoListPage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => VideoPlayerPage(videoId: video.id)),
     ).then((_) => _reload());
+  }
+
+  Future<void> _renameVideo(VideoItem video) async {
+    final controller = TextEditingController(text: video.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名视频'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '输入新名称'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('保存')),
+        ],
+      ),
+    );
+    if (newName != null && newName.isNotEmpty && newName != video.name) {
+      await _storage.renameVideo(video.id, newName);
+      _reload();
+    }
   }
 
   @override
@@ -96,7 +120,7 @@ class _VideoListPageState extends State<VideoListPage> {
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(video.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333)), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(video.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333)), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
               Text(
                 video.duration > 0 ? video.formattedDuration : '加载中...',
@@ -108,6 +132,10 @@ class _VideoListPageState extends State<VideoListPage> {
                   child: Text('已播至 ${video.formattedProgress}', style: const TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
                 ),
             ])),
+            IconButton(icon: const Icon(Icons.grid_view_outlined, size: 18, color: Color(0xFFBBBBBB)), onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoTimelinePage(videoId: video.id, videoName: video.name)));
+            }),
+            IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFFCCCCCC)), onPressed: () => _renameVideo(video)),
             IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFCCCCCC)), onPressed: () => _deleteVideo(video)),
           ]),
         ),

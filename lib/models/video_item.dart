@@ -1,6 +1,6 @@
 class VideoItem {
   final int id;
-  final String name;
+  String name;
   final DateTime addedAt;
   int progress; // seconds
   int duration; // total seconds

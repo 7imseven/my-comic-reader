@@ -349,20 +349,47 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   ),
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  // Progress slider (thicker touch target)
+                  // Progress slider with circular thumb
                   SizedBox(
-                    height: 36,
-                    child: Center(
-                      child: VideoProgressIndicator(
-                        _controller!,
-                        allowScrubbing: true,
-                        padding: EdgeInsets.zero,
-                        colors: const VideoProgressColors(
-                          playedColor: Color(0xFF4E6EF2),
-                          bufferedColor: Color(0x55FFFFFF),
-                          backgroundColor: Color(0x33FFFFFF),
-                        ),
-                      ),
+                    height: 48,
+                    child: LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        final ratio = duration.inMilliseconds > 0
+                            ? position.inMilliseconds / duration.inMilliseconds
+                            : 0.0;
+                        final thumbLeft = ratio * (constraints.maxWidth - 12);
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Center(
+                              child: VideoProgressIndicator(
+                                _controller!,
+                                allowScrubbing: true,
+                                padding: EdgeInsets.zero,
+                                colors: const VideoProgressColors(
+                                  playedColor: Color(0xFF4E6EF2),
+                                  bufferedColor: Color(0x55FFFFFF),
+                                  backgroundColor: Color(0x33FFFFFF),
+                                ),
+                              ),
+                            ),
+                            // Circular thumb
+                            Positioned(
+                              left: thumbLeft.clamp(0.0, constraints.maxWidth - 12),
+                              top: (constraints.maxHeight - 12) / 2,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF4E6EF2),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2)],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   Row(children: [
