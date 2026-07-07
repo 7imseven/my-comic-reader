@@ -18,6 +18,7 @@ class VideoStorageService {
   List<VideoItem> _videos = [];
   List<String> _tags = [];
   List<VideoBookmark> _bookmarks = [];
+  final Set<int> _generatingThumbs = {};
   int _nextId = 1;
   bool _initialized = false;
 
@@ -226,27 +227,31 @@ class VideoStorageService {
 
   // ===== Timeline Thumbnails =====
 
-  /// Generate a thumbnail every 30 seconds in the background
+  bool isGeneratingThumbs(int videoId) => _generatingThumbs.contains(videoId);
+
   Future<void> generateTimelineThumbnails(int videoId) async {
     final videoPath = getVideoPath(videoId);
     if (videoPath == null) return;
+    _generatingThumbs.add(videoId);
 
     final thumbDir = Directory('${_thumbsDir.path}/$videoId');
     if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
 
     // Generate thumbnails at fixed intervals (10s, 40s, 70s, ..., up to 100 captures)
     const intervalMs = 30000;
-    for (int t = 0; t < 100; t++) {
+    for (int t = 0; t < 200; t++) {
       final timeMs = t * intervalMs;
       final thumbPath = '${thumbDir.path}/$timeMs.jpg';
       if (File(thumbPath).existsSync()) continue;
       try {
-        await VideoThumbnail.thumbnailFile(
+        final result = await VideoThumbnail.thumbnailFile(
           video: videoPath, thumbnailPath: thumbPath,
           imageFormat: ImageFormat.JPEG, maxWidth: 160, quality: 60, timeMs: timeMs,
         );
-      } catch (_) { break; } // stop when we run out of video
+        if (result == null) break;
+      } catch (_) { break; }
     }
+    _generatingThumbs.remove(videoId);
   }
 
   /// Get sorted list of [timestamp (ms), file path] pairs
