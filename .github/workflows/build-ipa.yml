@@ -25,20 +25,12 @@ jobs:
       - name: Analyze code
         run: flutter analyze
 
-      - name: Build iOS (unsigned)
-        run: flutter build ios --no-codesign --debug
-
-      - name: Create IPA from build
-        run: |
-          mkdir -p /tmp/ipa/Payload
-          cp -r build/ios/iphoneos/Runner.app /tmp/ipa/Payload/
-          cd /tmp/ipa
-          zip -r GPT.ipa Payload
-          rm -rf Payload
+      - name: Build IPA (unsigned release)
+        run: flutter build ipa --no-codesign --release
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: GPT-unsigned-ipa
-          path: /tmp/ipa/GPT.ipa
+          path: build/ios/ipa/*.ipa
           compression-level: 0
