@@ -1,0 +1,26 @@
+workflows:
+  ios-build:
+    name: iOS Build (Flutter)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      vars:
+        APP_ID: com.example.comic_reader
+    scripts:
+      - flutter packages get
+      - flutter analyze
+      - flutter build ios --release --no-codesign
+      - |
+        # 打包 unsigned IPA
+        mkdir -p /tmp/ipa/Payload
+        cp -r build/ios/iphoneos/Runner.app /tmp/ipa/Payload/
+        cd /tmp/ipa
+        zip -r GPT.ipa Payload
+    artifacts:
+      - /tmp/ipa/GPT.ipa
+    publishing:
+      email:
+        recipients:
+          - your@email.com
