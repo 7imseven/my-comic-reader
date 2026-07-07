@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import '../models/video_bookmark.dart';
 import '../models/video_item.dart';
 import '../services/video_storage_service.dart';
 
@@ -79,7 +80,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   void _autoHideControls() {
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 6), () {
       if (mounted && !_isSeeking) {
         setState(() => _controlsVisible = false);
       }
@@ -150,6 +151,89 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     final pos = _controller!.value.position.inSeconds;
     _storage.updateProgress(widget.videoId, pos);
     _autoHideControls();
+  }
+
+  // ===== Bookmarks =====
+
+  void _addBookmark() {
+    if (!_isInitialized || _controller == null) return;
+    final currentSec = _controller!.value.position.inSeconds;
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('书签 (${_formatDuration(Duration(seconds: currentSec))})'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: '输入备注...', border: OutlineInputBorder()),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () {
+              _storage.addBookmark(widget.videoId, currentSec, controller.text.trim());
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ 书签已添加'), duration: Duration(seconds: 1)));
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBookmarkList() {
+    final bookmarks = _storage.getBookmarksForVideo(widget.videoId);
+    if (bookmarks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('还没有书签'), duration: Duration(seconds: 1)));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF222222),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        final list = List<VideoBookmark>.of(bookmarks);
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(padding: EdgeInsets.all(16), child: Text('📋 书签', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+            const Divider(color: Color(0xFF333333), height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: list.length,
+                itemBuilder: (_, i) {
+                  final bm = list[i];
+                  return Dismissible(
+                    key: ValueKey(bm.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
+                    onDismissed: (_) { _storage.deleteBookmark(bm.id); list.removeAt(i); },
+                    child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: const Color(0xFF4E6EF2).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                        child: Text(bm.formattedTime, style: const TextStyle(color: Color(0xFF4E6EF2), fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      title: Text(bm.note.isNotEmpty ? bm.note : '(无备注)', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      subtitle: Text(bm.formattedTime, style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _controller!.seekTo(Duration(seconds: bm.timeInSeconds));
+                        _controller!.play();
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ]),
+        );
+      },
+    );
   }
 
   // ===== Progress slider =====
@@ -265,15 +349,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   ),
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  // Progress slider
-                  VideoProgressIndicator(
-                    _controller!,
-                    allowScrubbing: true,
-                    padding: const EdgeInsets.only(bottom: 8),
-                    colors: const VideoProgressColors(
-                      playedColor: Color(0xFF4E6EF2),
-                      bufferedColor: Color(0x55FFFFFF),
-                      backgroundColor: Color(0x33FFFFFF),
+                  // Progress slider (thicker touch target)
+                  SizedBox(
+                    height: 36,
+                    child: Center(
+                      child: VideoProgressIndicator(
+                        _controller!,
+                        allowScrubbing: true,
+                        padding: EdgeInsets.zero,
+                        colors: const VideoProgressColors(
+                          playedColor: Color(0xFF4E6EF2),
+                          bufferedColor: Color(0x55FFFFFF),
+                          backgroundColor: Color(0x33FFFFFF),
+                        ),
+                      ),
                     ),
                   ),
                   Row(children: [
@@ -291,6 +380,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                       style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 12),
                     ),
                     const Spacer(),
+                    // Bookmark list
+                    IconButton(
+                      icon: const Icon(Icons.bookmark_outline, color: Colors.white, size: 22),
+                      onPressed: _showBookmarkList,
+                    ),
+                    // Add bookmark
+                    IconButton(
+                      icon: const Icon(Icons.bookmark_add_outlined, color: Colors.white, size: 22),
+                      onPressed: _addBookmark,
+                    ),
                     // Fullscreen
                     IconButton(
                       icon: Icon(
