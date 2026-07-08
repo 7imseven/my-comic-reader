@@ -125,21 +125,10 @@ class _ReaderPageState extends State<ReaderPage> {
     _saveProgress(newPage);
 
     // Lazy load pages around current position
-    // Load ahead: wider range (50 pages ahead)
+    // Load ahead: wider range (100 pages ahead)
     final startIdx = (newPage - 1 - 10).clamp(0, _totalPages - 1);
     final endIdx = (newPage - 1 + 100).clamp(0, _totalPages - 1);
     _batchLoad(startIdx, endIdx);
-
-    // Free far away pages (keep 20 behind, 120 ahead)
-    final toRemove = <int>[];
-    for (final idx in _pageData.keys) {
-      if (idx < startIdx - 20 || idx > endIdx + 120) {
-        toRemove.add(idx);
-      }
-    }
-    for (final idx in toRemove) {
-      _pageData.remove(idx);
-    }
 
     // Update scrollbar
     final maxScroll = _scrollController.position.maxScrollExtent;
