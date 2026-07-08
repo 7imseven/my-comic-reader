@@ -183,7 +183,16 @@ class VideoStorageService {
 
   Future<void> deleteVideo(int id) async {
     await _ensureInit();
-    try { _videos.removeWhere((v) => v.id == id); } catch (_) {}
+    // Get file info before removing from list
+    String? fileName;
+    try {
+      final v = _videos.firstWhere((v) => v.id == id);
+      fileName = v.fileName;
+    } catch (_) {}
+    _videos.removeWhere((v) => v.id == id);
+    if (fileName != null) {
+      try { await File('${_videosDir.path}/$fileName').delete(); } catch (_) {}
+    }
     try { await File('${_coversDir.path}/$id.jpg').delete(); } catch (_) {}
     _bookmarks.removeWhere((b) => b.videoId == id);
     await _saveMeta(); await _saveBookmarks();
