@@ -73,19 +73,31 @@ class _ReaderPageState extends State<ReaderPage> {
 
       setState(() => _isLoading = false);
 
-      // Async batch-load initial pages
+      // Load target page position first, then load all pages in background
       if (_comic!.progress > 0) {
         final targetIdx = _comic!.progress - 1;
-        _batchLoad(targetIdx - 5, targetIdx + 100);
+        _lazyLoadAsync(targetIdx);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final offset = (_comic!.progress - 1) * MediaQuery.of(context).size.height * 0.8;
           _scrollController.jumpTo(offset.clamp(0, _scrollController.position.maxScrollExtent));
         });
       } else {
-        _batchLoad(0, 100);
+        _lazyLoadAsync(0);
       }
+      // Load all remaining pages in background
+      _loadAllPages();
     } catch (e) {
       setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _loadAllPages() async {
+    for (int i = 0; i < _totalPages; i++) {
+      if (!_pageData.containsKey(i)) {
+        _lazyLoadAsync(i);
+        // Yield every 3 images to keep UI responsive
+        if (i % 3 == 0) await Future.delayed(Duration.zero);
+      }
     }
   }
 
