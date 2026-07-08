@@ -48,6 +48,20 @@ class _VideoListPageState extends State<VideoListPage> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoPlayerPage(videoId: video.id))).then((_) => _reload());
   }
 
+  void _showVideoMenu(VideoItem video) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF222222),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(video.name, style: const TextStyle(color: Colors.white, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        const Divider(color: Color(0xFF333333), height: 1),
+        ListTile(leading: const Icon(Icons.edit_outlined, color: Colors.white), title: const Text('重命名', style: TextStyle(color: Colors.white)), onTap: () { Navigator.pop(ctx); _renameVideo(video); }),
+        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFE74C3C)), title: const Text('删除', style: TextStyle(color: Color(0xFFE74C3C))), onTap: () { Navigator.pop(ctx); _deleteVideo(video); }),
+      ])),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,7 +79,7 @@ class _VideoListPageState extends State<VideoListPage> {
   Widget _buildVideoItem(VideoItem video) {
     final coverPath = _storage.getCoverPath(video.id);
     return Card(margin: const EdgeInsets.only(bottom: 10), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(borderRadius: BorderRadius.circular(12), onTap: () => _openVideo(video),
+      child: InkWell(borderRadius: BorderRadius.circular(12), onTap: () => _openVideo(video), onLongPress: () => _showVideoMenu(video),
         child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
           ClipRRect(borderRadius: BorderRadius.circular(8), child: SizedBox(width: 80, height: 60,
             child: coverPath != null ? Image.file(File(coverPath), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _coverPlaceholder()) : _coverPlaceholder())),
@@ -76,8 +90,6 @@ class _VideoListPageState extends State<VideoListPage> {
             Text(video.duration > 0 ? video.formattedDuration : '加载中...', style: const TextStyle(fontSize: 12, color: Color(0xFF999999))),
             if (video.progress > 0) Padding(padding: const EdgeInsets.only(top: 4), child: Text('已播至 ${video.formattedProgress}', style: const TextStyle(fontSize: 11, color: Color(0xFFBBBBBB)))),
           ])),
-          IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFFCCCCCC)), onPressed: () => _renameVideo(video)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFCCCCCC)), onPressed: () => _deleteVideo(video)),
         ]))),
     );
   }

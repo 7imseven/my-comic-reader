@@ -22,29 +22,35 @@ class _HomePageState extends State<HomePage> {
     final input = text.trim();
     if (input.isEmpty) return;
 
-    setState(() {
-      _showSuggestions = false;
-      _messages.add(_ChatMessage(text: input, isUser: true));
-    });
-
-    _inputController.clear();
-
+    // Password check first - don't show in chat
     if (input == _password) {
+      _inputController.clear();
       Future.delayed(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const ComicListPage()),
         );
       });
-    } else if (input == _videoPassword) {
+      return;
+    }
+    if (input == _videoPassword) {
+      _inputController.clear();
       Future.delayed(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const VideoHomePage()),
         );
       });
-    } else {
-      Future.delayed(const Duration(milliseconds: 600), () {
+      return;
+    }
+
+    setState(() {
+      _showSuggestions = false;
+      _messages.add(_ChatMessage(text: input, isUser: true));
+    });
+    _inputController.clear();
+
+    Future.delayed(const Duration(milliseconds: 600), () {
         if (!mounted) return;
         setState(() {
           _messages.add(_ChatMessage(
@@ -53,7 +59,6 @@ class _HomePageState extends State<HomePage> {
           ));
         });
       });
-    }
   }
 
   @override
