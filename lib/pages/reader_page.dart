@@ -279,7 +279,7 @@ class _ReaderPageState extends State<ReaderPage> {
     int count = 0;
     for (int ci = 0; ci < _chapters.length; ci++) {
       if (_chapters[ci].name.isNotEmpty) count++;
-      count += _chapters[ci].imageNames.length * 2; // separator + image
+      count += _chapters[ci].imageNames.length; // images only, no separators
       if (ci < _chapters.length - 1 && _chapters[ci].name.isNotEmpty) {
         count++;
       }
@@ -303,10 +303,6 @@ class _ReaderPageState extends State<ReaderPage> {
       }
       for (int pi = 0; pi < _chapters[ci].imageNames.length; pi++) {
         _globalPageIndex++;
-        if (_currentItemIdx == itemIdx) {
-          return _buildPageSeparator(_globalPageIndex);
-        }
-        _currentItemIdx++;
         if (_currentItemIdx == itemIdx) {
           return _buildPageImage(_globalPageIndex - 1, _chapters[ci].imageNames[pi]);
         }
@@ -347,13 +343,6 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  Widget _buildPageSeparator(int pageNum) {
-    return Container(
-      height: 1,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      color: const Color(0xFF333333),
-    );
-  }
 
   Widget _buildPageImage(int pageIndex, String imageName) {
     final data = _pageData[pageIndex];
