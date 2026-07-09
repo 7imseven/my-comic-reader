@@ -349,17 +349,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Widget _buildPageSeparator(int pageNum) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Center(
-        child: Text(
-          '第 $pageNum 页',
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF888888),
-            letterSpacing: 2,
-          ),
-        ),
-      ),
+      height: 1,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      color: const Color(0xFF333333),
     );
   }
 

@@ -119,6 +119,34 @@ class StorageService {
     await _saveMeta();
   }
 
+  /// Scan sandbox for comic files not in metadata
+  Future<int> scanSandbox() async {
+    final knownIds = _comics.map((c) => c.id).toSet();
+    final files = _comicsDir.listSync().whereType<File>().toList();
+    int restored = 0;
+    for (final f in files) {
+      final name = f.uri.pathSegments.last;
+      final dashIdx = name.indexOf('-');
+      if (dashIdx <= 0) continue;
+      final id = int.tryParse(name.substring(0, dashIdx));
+      if (id == null || knownIds.contains(id)) continue;
+
+      final comic = Comic(
+        id: id, name: name.substring(dashIdx + 1), addedAt: DateTime.now(),
+        fileName: name, fileSize: await f.length(),
+        hasCover: File('${_coversDir.path}/$id.jpg').existsSync(),
+      );
+      _comics.add(comic);
+      knownIds.add(id);
+      restored++;
+    }
+    if (restored > 0) {
+      _nextId = _comics.map((c) => c.id).reduce((a, b) => a > b ? a : b) + 1;
+      await _saveMeta();
+    }
+    return restored;
+  }
+
   Future<void> updateProgress(int id, int progress) async {
     final comic = getComic(id);
     if (comic == null) return;

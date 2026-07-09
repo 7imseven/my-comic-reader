@@ -140,6 +140,13 @@ class _ComicListPageState extends State<ComicListPage> {
 
   void _openComic(Comic comic) { Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderPage(comicId: comic.id))); }
 
+  Future<void> _scanSandbox() async {
+    final count = await _storage.scanSandbox();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(count > 0 ? '✅ 恢复了 $count 部漫画' : '没有需要恢复的漫画'), duration: Duration(seconds: 2)));
+    _reload();
+  }
+
   void _showStorageInfo() {
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: const Row(children: [Icon(Icons.info_outline, size: 20, color: Color(0xFF4E6EF2)), SizedBox(width: 8), Text('存储信息', style: TextStyle(fontSize: 17))]),
@@ -169,6 +176,7 @@ class _ComicListPageState extends State<ComicListPage> {
       appBar: AppBar(
         title: const Text('📚 我的漫画'), backgroundColor: Colors.white, elevation: 0.5,
         actions: [
+          IconButton(icon: const Icon(Icons.refresh, size: 20), tooltip: '扫描沙盒', onPressed: _scanSandbox),
           IconButton(icon: const Icon(Icons.info_outline, size: 20), tooltip: '存储信息', onPressed: _showStorageInfo),
           IconButton(icon: const Icon(Icons.upload_file_outlined, size: 20), tooltip: '导入备份', onPressed: _importBackup),
           IconButton(icon: const Icon(Icons.download_outlined, size: 20), tooltip: '导出备份', onPressed: _exportBackup),
