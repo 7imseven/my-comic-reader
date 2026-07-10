@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 /// 漫画页面索引。
 /// 导入时由 ZIP 中央目录构建，保存为 {comicDir}/index_{comicId}.json。
 /// 阅读时直接从索引中获取偏移量，无需重新解析 ZIP。
