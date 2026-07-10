@@ -105,8 +105,19 @@ class _ReaderPageState extends State<ReaderPage> {
     try {
       final data = _allImages[pageIndex].content as Uint8List;
       _pageData[pageIndex] = data;
+      // Sliding window: evict pages far from current position
+      _evictOutsideWindow(pageIndex, windowSize: 40);
       if (mounted) setState(() {});
     } catch (_) {}
+  }
+
+  /// Evict pages outside the sliding window to keep memory bounded.
+  /// Keeps [windowSize] pages centered on [centerIdx].
+  void _evictOutsideWindow(int centerIdx, {int windowSize = 40}) {
+    final half = windowSize ~/ 2;
+    final start = (centerIdx - half).clamp(0, _totalPages);
+    final end = (centerIdx + half).clamp(0, _totalPages);
+    _pageData.removeWhere((key, _) => key < start || key > end);
   }
 
   void _onScroll() {
