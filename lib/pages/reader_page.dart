@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:archive/archive.dart';
 import '../models/comic.dart';
 import '../services/storage_service.dart';
+import '../services/comic_index.dart';
+import '../services/zip_page_reader.dart';
 
 class ReaderPage extends StatefulWidget {
   final int comicId;
@@ -19,8 +20,8 @@ class _ReaderPageState extends State<ReaderPage> {
   final Set<int> _zoomedPages = {};
 
   Comic? _comic;
-  Archive? _archive;
-  List<ArchiveFile> _allImages = [];
+  ComicIndex? _index;
+  ZipPageReader? _zipReader;
   List<Chapter> _chapters = [];
   int _totalPages = 0;
   int _currentPage = 0;
@@ -45,6 +46,7 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void dispose() {
     _pageData.clear();
+    _zipReader?.close();
     _scrollController.dispose();
     super.dispose();
   }
@@ -57,15 +59,21 @@ class _ReaderPageState extends State<ReaderPage> {
         return;
       }
 
-      _archive = await _storage.loadZip(widget.comicId);
-      if (_archive == null) {
-        setState(() => _error = '无法读取文件');
-        return;
-      }
+      // Load pre-built index (metadata only, ~300KB)
+      _index = await _storage.loadIndex(widget.comicId);
+      _totalPages = _index!.totalPages;
 
-      _allImages = _storage.getImageFiles(_archive!);
-      _totalPages = _allImages.length;
-      _chapters = _storage.getChapters(_allImages);
+      // Build chapter list from index (compatible with existing Chapter model)
+      _chapters = _index!.chapters.map((c) => Chapter(
+        name: c.name,
+        imageNames: _index!.pages
+            .where((p) => p.chapterIdx == c.chapterIdx)
+            .map((p) => p.fileName)
+            .toList(),
+      )).toList();
+
+      // Open ZIP for random-access page reading
+      _zipReader = await _storage.openZipForComic(widget.comicId);
 
       if (_comic!.totalPages == 0) {
         _storage.updateTotalPages(widget.comicId, _totalPages);
@@ -73,7 +81,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
       setState(() => _isLoading = false);
 
-      // Load target page position first, then load all pages in background
+      // Load target page and jump to progress position
       if (_comic!.progress > 0) {
         final targetIdx = _comic!.progress - 1;
         _lazyLoadAsync(targetIdx);
@@ -100,10 +108,14 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _lazyLoadAsync(int pageIndex) async {
     if (_pageData.containsKey(pageIndex)) return;
+    if (_zipReader == null || _index == null) return;
     // Yield to let UI update between image loads
     await Future.delayed(Duration.zero);
     try {
-      final data = _allImages[pageIndex].content as Uint8List;
+      final page = _index!.pages[pageIndex];
+      final data = await _zipReader!.readEntry(
+        page.offsetInZip, page.compressedSize, page.uncompressedSize,
+      );
       _pageData[pageIndex] = data;
       // Sliding window: evict pages far from current position
       _evictOutsideWindow(pageIndex, windowSize: 40);
@@ -113,22 +125,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// Evict pages outside the sliding window to keep memory bounded.
   /// Keeps [windowSize] pages centered on [centerIdx].
-  /// Also releases ArchiveFile._content for evicted pages via clear().
   void _evictOutsideWindow(int centerIdx, {int windowSize = 40}) {
     final half = windowSize ~/ 2;
     final start = (centerIdx - half).clamp(0, _totalPages);
     final end = (centerIdx + half).clamp(0, _totalPages);
-    _pageData.removeWhere((key, _) {
-      if (key < start || key > end) {
-        // Release ArchiveFile._content so the Uint8List can be GC'd.
-        // _rawContent (compressed) is retained for fast re-decompression.
-        if (key >= 0 && key < _allImages.length) {
-          _allImages[key].clear();
-        }
-        return true;
-      }
-      return false;
-    });
+    _pageData.removeWhere((key, _) => key < start || key > end);
   }
 
   void _onScroll() {
@@ -189,9 +190,15 @@ class _ReaderPageState extends State<ReaderPage> {
   void _scrollToChapter(int chapterIdx) {
     if (chapterIdx < 0 || chapterIdx >= _chapters.length) return;
 
-    int targetPage = 1;
-    for (int i = 0; i < chapterIdx; i++) {
-      targetPage += _chapters[i].imageNames.length;
+    // O(1) lookup from index if available, otherwise fall back to iteration
+    int targetPage;
+    if (_index != null && chapterIdx < _index!.chapters.length) {
+      targetPage = _index!.chapters[chapterIdx].startPageIndex + 1;
+    } else {
+      targetPage = 1;
+      for (int i = 0; i < chapterIdx; i++) {
+        targetPage += _chapters[i].imageNames.length;
+      }
     }
 
     final targetIdx = targetPage - 1;
