@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
+import 'package:charset_converter/charset_converter.dart';
 
 /// 从 ZIP 中央目录读取的单个条目元数据。
 class ZipEntryMeta {
@@ -84,7 +87,8 @@ class ZipCentralDirectoryReader {
         final uncompressedSize = cdView.getUint32(pos + 24, Endian.little);
         final crc32 = cdView.getUint32(pos + 16, Endian.little);
 
-        final fileName = utf8Decode(cdBytes, pos + 46, nameLen);
+        final rawName = cdBytes.sublist(pos + 46, pos + 46 + nameLen);
+        final fileName = await fixGarbledName(rawName);
 
         entries.add(ZipEntryMeta(
           fileName: fileName,
@@ -118,8 +122,29 @@ class ZipCentralDirectoryReader {
     }
   }
 
-  static String utf8Decode(Uint8List bytes, int offset, int length) {
-    return String.fromCharCodes(bytes.sublist(offset, offset + length));
+  static Future<String> fixGarbledName(Uint8List rawBytes) async {
+    final rawStr = String.fromCharCodes(rawBytes);
+    if (_looksLikeGarbled(rawStr)) {
+      try {
+        // Try GBK (common for Chinese ZIP files)
+        return await CharsetConverter.decode('GBK', rawBytes);
+      } catch (_) {
+        try {
+          return await CharsetConverter.decode('GB2312', rawBytes);
+        } catch (_) {}
+      }
+    }
+    return rawStr;
+  }
+
+  /// Heuristic: name has high bytes but no CJK → likely garbled
+  static bool _looksLikeGarbled(String name) {
+    bool hasHigh = false;
+    for (final c in name.runes) {
+      if (c > 0x7F && c < 0x400) hasHigh = true;
+      if (c >= 0x4E00 && c <= 0x9FFF) return false;
+    }
+    return hasHigh;
   }
 }
 
@@ -130,20 +155,33 @@ class ZipPageReader {
   RandomAccessFile? _file;
   bool _isOpen = false;
 
+  // Sequential task queue: serializes RandomAccessFile access
+  // to prevent concurrent seek+read race conditions.
+  Future<void>? _previousTask;
+
   Future<void> open(String zipPath) async {
     _file = await File(zipPath).open();
     _isOpen = true;
   }
 
   /// 读取指定偏移量的条目，解压后返回图片数据。
+  /// 通过任务队列保证 RandomAccessFile 的顺序访问。
   Future<Uint8List> readEntry(int dataOffset, int compressedSize, int uncompressedSize) async {
-    final file = _file;
-    if (file == null) throw StateError('ZipPageReader not opened');
+    // Chain: wait for previous read to finish before starting this one
+    final previous = _previousTask;
+    final completer = Completer<void>();
+    _previousTask = completer.future;
+    if (previous != null) await previous;
 
-    await file.setPosition(dataOffset);
-    final compressed = await file.read(compressedSize);
-    // ZIP 使用 raw deflate（无 zlib/gzip header）
-    return Inflate(compressed, uncompressedSize).getBytes() as Uint8List;
+    try {
+      final file = _file;
+      if (file == null) throw StateError('ZipPageReader not opened');
+      await file.setPosition(dataOffset);
+      final compressed = await file.read(compressedSize);
+      return Inflate(compressed, uncompressedSize).getBytes() as Uint8List;
+    } finally {
+      completer.complete();
+    }
   }
 
   void close() {
