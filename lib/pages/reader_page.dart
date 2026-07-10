@@ -84,20 +84,8 @@ class _ReaderPageState extends State<ReaderPage> {
       } else {
         _lazyLoadAsync(0);
       }
-      // Load all remaining pages in background
-      _loadAllPages();
     } catch (e) {
       setState(() => _error = e.toString());
-    }
-  }
-
-  Future<void> _loadAllPages() async {
-    for (int i = 0; i < _totalPages; i++) {
-      if (!_pageData.containsKey(i)) {
-        _lazyLoadAsync(i);
-        // Yield every 3 images to keep UI responsive
-        if (i % 3 == 0) await Future.delayed(Duration.zero);
-      }
     }
   }
 
