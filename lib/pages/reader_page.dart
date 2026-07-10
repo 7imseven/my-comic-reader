@@ -147,9 +147,9 @@ class _ReaderPageState extends State<ReaderPage> {
     _saveProgress(newPage);
 
     // Lazy load pages around current position
-    // Load ahead: wider range (100 pages ahead)
+    // Preload ahead for smooth scrolling
     final startIdx = (newPage - 1 - 10).clamp(0, _totalPages - 1);
-    final endIdx = (newPage - 1 + 100).clamp(0, _totalPages - 1);
+    final endIdx = (newPage - 1 + 20).clamp(0, _totalPages - 1);
     _batchLoad(startIdx, endIdx);
 
     // Update scrollbar
@@ -195,8 +195,8 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     final targetIdx = targetPage - 1;
-    // Preload wide range around target
-    _batchLoad(targetIdx - 15, targetIdx + 100);
+    // Preload focused range around target chapter
+    _batchLoad(targetIdx - 10, targetIdx + 30);
     // Trigger rebuild to start loading
     setState(() => _currentPage = targetPage);
 
