@@ -113,11 +113,22 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// Evict pages outside the sliding window to keep memory bounded.
   /// Keeps [windowSize] pages centered on [centerIdx].
+  /// Also releases ArchiveFile._content for evicted pages via clear().
   void _evictOutsideWindow(int centerIdx, {int windowSize = 40}) {
     final half = windowSize ~/ 2;
     final start = (centerIdx - half).clamp(0, _totalPages);
     final end = (centerIdx + half).clamp(0, _totalPages);
-    _pageData.removeWhere((key, _) => key < start || key > end);
+    _pageData.removeWhere((key, _) {
+      if (key < start || key > end) {
+        // Release ArchiveFile._content so the Uint8List can be GC'd.
+        // _rawContent (compressed) is retained for fast re-decompression.
+        if (key >= 0 && key < _allImages.length) {
+          _allImages[key].clear();
+        }
+        return true;
+      }
+      return false;
+    });
   }
 
   void _onScroll() {
