@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
-import 'package:archive/archive_io.dart';
 import 'package:charset_converter/charset_converter.dart';
 
 /// 从 ZIP 中央目录读取的单个条目元数据。
@@ -123,10 +123,18 @@ class ZipCentralDirectoryReader {
   }
 
   static Future<String> fixGarbledName(Uint8List rawBytes) async {
-    final rawStr = String.fromCharCodes(rawBytes);
-    if (_looksLikeGarbled(rawStr)) {
+    // Try UTF-8 first (modern ZIPs use bit 11 flag for UTF-8)
+    String decoded;
+    try {
+      decoded = utf8.decode(rawBytes);
+    } on FormatException {
+      // Not valid UTF-8, use Latin-1 as raw string
+      decoded = String.fromCharCodes(rawBytes);
+    }
+
+    // Check if the result looks garbled (high bytes but no CJK)
+    if (_looksLikeGarbled(decoded)) {
       try {
-        // Try GBK (common for Chinese ZIP files)
         return await CharsetConverter.decode('GBK', rawBytes);
       } catch (_) {
         try {
@@ -134,7 +142,7 @@ class ZipCentralDirectoryReader {
         } catch (_) {}
       }
     }
-    return rawStr;
+    return decoded;
   }
 
   /// Heuristic: name has high bytes but no CJK → likely garbled
