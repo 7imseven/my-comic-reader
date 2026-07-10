@@ -5,6 +5,8 @@ import 'package:archive/archive.dart';
 import 'package:charset_converter/charset_converter.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/comic.dart';
+import 'comic_index.dart';
+import 'zip_page_reader.dart';
 
 class StorageService {
   static final StorageService _instance = StorageService._();
@@ -59,7 +61,7 @@ class StorageService {
     try { return _comics.firstWhere((c) => c.id == id); } catch (_) { return null; }
   }
 
-  /// Import a ZIP file into the app sandbox
+  /// Import a ZIP file into the app sandbox, building a ComicIndex.
   Future<int> importComic(File sourceFile) async {
     final path = sourceFile.path;
     final fileName = path.split(Platform.pathSeparator).last;
@@ -70,21 +72,84 @@ class StorageService {
     // Copy file to sandbox
     await sourceFile.copy(destPath);
 
-    // Count pages and extract cover
-    final bytes = await File(destPath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
-    final imageFiles = archive.files
-        .where((f) => f.isFile && _isImage(f.name))
+    // Parse ZIP central directory (metadata only, no decompression)
+    final entries = await ZipCentralDirectoryReader.read(destPath);
+    final imageEntries = entries
+        .where((e) => _isImage(e.fileName))
         .toList();
-    final sortedImages = imageFiles..sort((a, b) => _compareNames(a.name, b.name));
+    imageEntries.sort((a, b) => _compareNames(a.fileName, b.fileName));
 
-    final totalPages = sortedImages.length;
+    final totalPages = imageEntries.length;
+
+    // Build PageEntry list and detect chapters from folder structure
+    final pages = <PageEntry>[];
+    final chapterNames = <int, String>{};
+    final chapterPages = <int, List<int>>{};
+    String? currentFolder;
+    int chapterIdx = 0;
+
+    for (int i = 0; i < imageEntries.length; i++) {
+      final entry = imageEntries[i];
+      final folder = _getFolderName(entry.fileName);
+
+      if (folder != currentFolder) {
+        if (currentFolder != null) chapterIdx++;
+        currentFolder = folder;
+      }
+
+      if (folder != null && !chapterNames.containsKey(chapterIdx)) {
+        chapterNames[chapterIdx] = folder;
+      }
+
+      pages.add(PageEntry(
+        pageIndex: i,
+        fileName: entry.fileName,
+        offsetInZip: entry.dataOffset,
+        compressedSize: entry.compressedSize,
+        uncompressedSize: entry.uncompressedSize,
+        imageFormat: _getExtension(entry.fileName),
+        chapterIdx: chapterIdx,
+      ));
+      chapterPages.putIfAbsent(chapterIdx, () => []).add(i);
+    }
+
+    // Build chapter list
+    final chapters = chapterPages.entries.map((e) {
+      final idx = e.key;
+      return ChapterEntry(
+        chapterIdx: idx,
+        name: chapterNames[idx] ?? '',
+        startPageIndex: e.value.first,
+        pageCount: e.value.length,
+      );
+    }).toList();
+
+    // If no folder-based chapters, treat as single chapter
+    if (chapters.isEmpty && pages.isNotEmpty) {
+      chapters.add(ChapterEntry(
+        chapterIdx: 0,
+        name: '',
+        startPageIndex: 0,
+        pageCount: pages.length,
+      ));
+    }
+
+    // Save index
+    final index = ComicIndex(comicId: id, totalPages: totalPages, pages: pages, chapters: chapters);
+    await _saveIndex(id, index);
+
+    // Extract cover thumbnail using ZipPageReader (no Archive needed)
     bool hasCover = false;
-
-    // Try to extract first image as cover thumbnail
-    if (sortedImages.isNotEmpty) {
+    if (imageEntries.isNotEmpty) {
       try {
-        final coverData = sortedImages.first.content as Uint8List;
+        final reader = ZipPageReader();
+        await reader.open(destPath);
+        final coverData = await reader.readEntry(
+          imageEntries.first.dataOffset,
+          imageEntries.first.compressedSize,
+          imageEntries.first.uncompressedSize,
+        );
+        reader.close();
         final thumbData = _makeThumbnail(coverData);
         await File('${_coversDir.path}/$id.jpg').writeAsBytes(thumbData);
         hasCover = true;
@@ -114,6 +179,8 @@ class StorageService {
     final filePath = '${_comicsDir.path}/${comic.fileName}';
     try { await File(filePath).delete(); } catch (_) {}
     try { await File('${_coversDir.path}/$id.jpg').delete(); } catch (_) {}
+    // Remove index file
+    try { await File('${_appDir.path}/index_$id.json').delete(); } catch (_) {}
 
     _comics.removeWhere((c) => c.id == id);
     await _saveMeta();
@@ -346,6 +413,36 @@ class StorageService {
 
     await _saveMeta();
     return imported;
+  }
+
+  // ===== Index & ZIP Reader =====
+
+  Future<void> _saveIndex(int comicId, ComicIndex index) async {
+    final json = jsonEncode(index.toJson());
+    await File('${_appDir.path}/index_$comicId.json').writeAsString(json);
+  }
+
+  Future<ComicIndex> loadIndex(int comicId) async {
+    final text = await File('${_appDir.path}/index_$comicId.json').readAsString();
+    return ComicIndex.fromJson(jsonDecode(text));
+  }
+
+  Future<ZipPageReader> openZipForComic(int comicId) async {
+    final comic = getComic(comicId);
+    if (comic == null) throw Exception('Comic not found');
+    final reader = ZipPageReader();
+    await reader.open('${_comicsDir.path}/${comic.fileName}');
+    return reader;
+  }
+
+  static String? _getFolderName(String path) {
+    final parts = path.split('/');
+    return parts.length > 1 ? parts[0] : null;
+  }
+
+  static String _getExtension(String name) {
+    final dot = name.lastIndexOf('.');
+    return (dot >= 0) ? name.substring(dot + 1).toLowerCase() : '';
   }
 
   // ===== Helpers =====
