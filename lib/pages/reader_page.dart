@@ -121,6 +121,8 @@ class _ReaderPageState extends State<ReaderPage> {
         compressionMethod: page.compressionMethod,
       );
       _pageData[pageIndex] = data;
+      // 预解码到 ImageCache：与 Image.memory(data) 使用同一 MemoryImage key
+      if (mounted) precacheImage(MemoryImage(data), context);
       _cacheAspectRatio(pageIndex, data);
       _evictOutsideWindow(pageIndex, windowSize: 40);
       if (mounted) setState(() {});
