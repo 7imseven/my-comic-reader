@@ -11,13 +11,15 @@ class ZipEntryMeta {
   final int compressedSize;
   final int uncompressedSize;
   final int crc32;
-  int dataOffset; // 压缩数据在文件中的起始偏移（从 Local File Header 计算得出）
+  final int compressionMethod;
+  int dataOffset;
 
   ZipEntryMeta({
     required this.fileName,
     required this.compressedSize,
     required this.uncompressedSize,
     required this.crc32,
+    required this.compressionMethod,
     required this.dataOffset,
   });
 }
@@ -79,6 +81,7 @@ class ZipCentralDirectoryReader {
         final sig = cdView.getUint32(pos, Endian.little);
         if (sig != 0x02014b50) break;
 
+        final compressionMethod = cdView.getUint16(pos + 10, Endian.little);
         final nameLen = cdView.getUint16(pos + 28, Endian.little);
         final extraLen = cdView.getUint16(pos + 30, Endian.little);
         final commentLen = cdView.getUint16(pos + 32, Endian.little);
@@ -95,6 +98,7 @@ class ZipCentralDirectoryReader {
           compressedSize: compressedSize,
           uncompressedSize: uncompressedSize,
           crc32: crc32,
+          compressionMethod: compressionMethod,
           dataOffset: 0, // 稍后计算
         ));
         localOffsets.add(localHeaderOffset);
@@ -173,9 +177,9 @@ class ZipPageReader {
   }
 
   /// 读取指定偏移量的条目，解压后返回图片数据。
-  /// 通过任务队列保证 RandomAccessFile 的顺序访问。
-  Future<Uint8List> readEntry(int dataOffset, int compressedSize, int uncompressedSize) async {
-    // Chain: wait for previous read to finish before starting this one
+  /// [compressionMethod] 0=Stored(不压缩), 8=Deflated(deflate压缩)
+  Future<Uint8List> readEntry(int dataOffset, int compressedSize, int uncompressedSize,
+      {int compressionMethod = 8}) async {
     final previous = _previousTask;
     final completer = Completer<void>();
     _previousTask = completer.future;
@@ -185,8 +189,19 @@ class ZipPageReader {
       final file = _file;
       if (file == null) throw StateError('ZipPageReader not opened');
       await file.setPosition(dataOffset);
-      final compressed = await file.read(compressedSize);
-      return Inflate(compressed, uncompressedSize).getBytes() as Uint8List;
+      final data = await file.read(compressedSize);
+
+      if (compressionMethod == 0) {
+        // Stored: not compressed, return raw bytes directly
+        return data;
+      }
+
+      // Deflated (8) or unknown: try Inflate
+      try {
+        return Inflate(data, uncompressedSize).getBytes() as Uint8List;
+      } catch (_) {
+        return data;
+      }
     } finally {
       completer.complete();
     }

@@ -115,6 +115,7 @@ class _ReaderPageState extends State<ReaderPage> {
       final page = _index!.pages[pageIndex];
       final data = await _zipReader!.readEntry(
         page.offsetInZip, page.compressedSize, page.uncompressedSize,
+        compressionMethod: page.compressionMethod,
       );
       _pageData[pageIndex] = data;
       // Sliding window: evict pages far from current position

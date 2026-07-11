@@ -109,6 +109,7 @@ class StorageService {
         uncompressedSize: entry.uncompressedSize,
         imageFormat: _getExtension(entry.fileName),
         chapterIdx: chapterIdx,
+        compressionMethod: entry.compressionMethod,
       ));
       chapterPages.putIfAbsent(chapterIdx, () => []).add(i);
     }
@@ -148,6 +149,7 @@ class StorageService {
           imageEntries.first.dataOffset,
           imageEntries.first.compressedSize,
           imageEntries.first.uncompressedSize,
+          compressionMethod: imageEntries.first.compressionMethod,
         );
         reader.close();
         final thumbData = _makeThumbnail(coverData);

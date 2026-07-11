@@ -42,6 +42,7 @@ class PageEntry {
   final int uncompressedSize; // 原始大小
   final String imageFormat;   // "jpg", "png", "webp" 等
   final int chapterIdx;
+  final int compressionMethod; // 0=Stored, 8=Deflated
 
   PageEntry({
     required this.pageIndex,
@@ -51,6 +52,7 @@ class PageEntry {
     required this.uncompressedSize,
     required this.imageFormat,
     required this.chapterIdx,
+    this.compressionMethod = 8,
   });
 
   Map<String, dynamic> toJson() => {
@@ -61,6 +63,7 @@ class PageEntry {
     'uncompressedSize': uncompressedSize,
     'imageFormat': imageFormat,
     'chapterIdx': chapterIdx,
+    'compressionMethod': compressionMethod,
   };
 
   factory PageEntry.fromJson(Map<String, dynamic> json) => PageEntry(
@@ -71,6 +74,7 @@ class PageEntry {
     uncompressedSize: json['uncompressedSize'] as int,
     imageFormat: json['imageFormat'] as String,
     chapterIdx: json['chapterIdx'] as int,
+    compressionMethod: json['compressionMethod'] as int? ?? 8,
   );
 }
 
