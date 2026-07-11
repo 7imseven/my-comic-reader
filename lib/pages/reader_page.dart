@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/comic.dart';
 import '../services/storage_service.dart';
@@ -17,6 +18,7 @@ class _ReaderPageState extends State<ReaderPage> {
   final StorageService _storage = StorageService();
   final ScrollController _scrollController = ScrollController();
   final Map<int, Uint8List?> _pageData = {};
+  final Map<int, double> _pageAspectRatios = {};
   final Set<int> _zoomedPages = {};
 
   Comic? _comic;
@@ -46,6 +48,7 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void dispose() {
     _pageData.clear();
+    _pageAspectRatios.clear();
     _zipReader?.close();
     _scrollController.dispose();
     super.dispose();
@@ -118,9 +121,25 @@ class _ReaderPageState extends State<ReaderPage> {
         compressionMethod: page.compressionMethod,
       );
       _pageData[pageIndex] = data;
-      // Sliding window: evict pages far from current position
+      _cacheAspectRatio(pageIndex, data);
       _evictOutsideWindow(pageIndex, windowSize: 40);
       if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  void _cacheAspectRatio(int pageIndex, Uint8List data) {
+    if (_pageAspectRatios.containsKey(pageIndex)) return;
+    try {
+      ui.instantiateImageCodec(data).then((c) {
+        c.getNextFrame().then((frameInfo) {
+          final w = frameInfo.image.width.toDouble();
+          final h = frameInfo.image.height.toDouble();
+          if (w > 0 && h > 0 && mounted) {
+            setState(() { _pageAspectRatios[pageIndex] = w / h; });
+          }
+          c.dispose();
+        });
+      });
     } catch (_) {}
   }
 
@@ -367,9 +386,11 @@ class _ReaderPageState extends State<ReaderPage> {
     final isZoomed = _zoomedPages.contains(pageIndex);
 
     if (data == null) {
+      final screenW = MediaQuery.of(context).size.width;
+      final ratio = _pageAspectRatios[pageIndex] ?? 1.4;
       return Container(
         width: double.infinity,
-        height: MediaQuery.of(context).size.height * 0.5,
+        height: screenW / ratio,
         color: const Color(0xFF222222),
         child: const Center(
           child: SizedBox(width: 24, height: 24,
