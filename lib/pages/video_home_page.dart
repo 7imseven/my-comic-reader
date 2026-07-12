@@ -14,6 +14,7 @@ class _VideoHomePageState extends State<VideoHomePage> {
   final VideoStorageService _storage = VideoStorageService();
   List<String> _tags = [];
   Map<String, int> _counts = {};
+  bool _isImporting = false;
 
   @override
   void initState() { super.initState(); _initAndReload(); }
@@ -28,23 +29,34 @@ class _VideoHomePageState extends State<VideoHomePage> {
   }
 
   Future<void> _importVideo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['mp4', 'mov', 'm4v', 'avi', 'mkv']);
-    if (result == null || result.files.isEmpty) return;
-    final path = result.files.first.path;
-    if (path == null) return;
-
-    final selectedTags = await _showTagPicker();
-    if (selectedTags == null || selectedTags.isEmpty) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在导入视频...'), duration: Duration(seconds: 1)));
+    if (_isImporting) return;
+    setState(() => _isImporting = true);
     try {
+      // iOS 上 avi/mkv 不是标准 UTType，会导致文件选择器无法弹出
+      // 只保留 iOS 原生支持的格式
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp4', 'mov', 'm4v'],
+      );
+      if (result == null || result.files.isEmpty) { setState(() => _isImporting = false); return; }
+      final path = result.files.first.path;
+      if (path == null) { setState(() => _isImporting = false); return; }
+
+      final selectedTags = await _showTagPicker();
+      if (selectedTags == null || selectedTags.isEmpty) { setState(() => _isImporting = false); return; }
+      if (!mounted) { _isImporting = false; return; }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在导入视频...'), duration: Duration(seconds: 1)));
+
       await _storage.importVideo(File(path), selectedTags);
-      if (!mounted) return;
+      if (!mounted) { _isImporting = false; return; }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ 导入成功'), duration: Duration(seconds: 2)));
       await _reload();
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) { _isImporting = false; return; }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ 导入失败: $e')));
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+      else _isImporting = false;
     }
   }
 
@@ -136,8 +148,16 @@ class _VideoHomePageState extends State<VideoHomePage> {
                   ]))),
               );
             }),
-      floatingActionButton: FloatingActionButton.extended(onPressed: _importVideo, backgroundColor: const Color(0xFF4E6EF2), foregroundColor: Colors.white,
-        icon: const Icon(Icons.add, size: 20), label: const Text('导入视频')),
+      floatingActionButton: _isImporting
+          ? const FloatingActionButton.extended(
+              onPressed: null,
+              backgroundColor: Color(0xFF4E6EF2),
+              foregroundColor: Colors.white,
+              icon: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              label: Text('导入中...'),
+            )
+          : FloatingActionButton.extended(onPressed: _importVideo, backgroundColor: const Color(0xFF4E6EF2), foregroundColor: Colors.white,
+              icon: const Icon(Icons.add, size: 20), label: const Text('导入视频')),
     );
   }
 }
