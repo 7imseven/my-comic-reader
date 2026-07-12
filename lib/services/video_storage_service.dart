@@ -136,19 +136,35 @@ class VideoStorageService {
     await sourceFile.copy(destPath);
     final fileSize = await File(destPath).length();
 
-    bool hasCover = false;
-    try {
-      final thumbPath = await VideoThumbnail.thumbnailFile(
-        video: destPath, thumbnailPath: '${_coversDir.path}/$id.jpg',
-        imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: 10000,
-      );
-      hasCover = thumbPath != null;
-    } catch (_) {}
-
     for (final tag in tags) { if (!_tags.contains(tag)) _tags.add(tag); }
-    _videos.add(VideoItem(id: id, name: fileName, addedAt: DateTime.now(), fileName: destName, fileSize: fileSize, tags: tags, hasCover: hasCover));
+    _videos.add(VideoItem(id: id, name: fileName, addedAt: DateTime.now(), fileName: destName, fileSize: fileSize, tags: tags, hasCover: false));
     await _saveMeta(); await _saveTags();
+
+    // 缩略图异步生成，不阻塞导入流程
+    // iOS 上 VideoThumbnail 可能因不支持的格式(avi/mkv等)阻塞平台通道，
+    // 放在 import 返回后独立执行，即使挂死也不影响导入
+    _generateThumbnailAsync(id, destPath);
     return id;
+  }
+
+  void _generateThumbnailAsync(int videoId, String videoPath) {
+    // 异步执行，不阻塞调用者。成功时更新 hasCover 并保存元数据
+    VideoThumbnail.thumbnailFile(
+      video: videoPath,
+      thumbnailPath: '${_coversDir.path}/$videoId.jpg',
+      imageFormat: ImageFormat.JPEG,
+      maxWidth: 200,
+      quality: 70,
+      timeMs: 10000,
+    ).then((thumbPath) {
+      if (thumbPath == null) return;
+      final idx = _videos.indexWhere((v) => v.id == videoId);
+      if (idx < 0) return;
+      _videos[idx].hasCover = true;
+      _saveMeta();
+    }).catchError((_) {
+      // 缩略图生成失败不影响功能
+    });
   }
 
   Future<int> scanSandbox() async {
@@ -269,13 +285,9 @@ class VideoStorageService {
       final data = bytes.sublist(dOff, dOff + dl); dOff += dl;
       final id = _nextId++; final dp = '${_videosDir.path}/$id-$name';
       await File(dp).writeAsBytes(data);
-      bool hasCover = false;
-      try {
-        final tp = await VideoThumbnail.thumbnailFile(video: dp, thumbnailPath: '${_coversDir.path}/$id.jpg', imageFormat: ImageFormat.JPEG, maxWidth: 200, quality: 70, timeMs: 10000);
-        hasCover = tp != null;
-      } catch (_) {}
       for (final tag in tags) { if (!_tags.contains(tag)) _tags.add(tag); }
-      _videos.add(VideoItem(id: id, name: name, addedAt: DateTime.now(), fileName: '$id-$name', fileSize: dl, tags: tags.isEmpty ? ['默认'] : tags, hasCover: hasCover));
+      _videos.add(VideoItem(id: id, name: name, addedAt: DateTime.now(), fileName: '$id-$name', fileSize: dl, tags: tags.isEmpty ? ['默认'] : tags, hasCover: false));
+      _generateThumbnailAsync(id, dp);
       imported++;
     }
     await _saveMeta(); await _saveTags(); return imported;
